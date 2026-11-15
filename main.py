@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -127,13 +128,31 @@ async def order_description(message: Message, state: FSMContext, bot: Bot):
     )
 
 
+async def handle_health(reader, writer):
+    await reader.read(1024)
+    writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nBot is alive!")
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+
+
+async def start_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = await asyncio.start_server(handle_health, "0.0.0.0", port)
+    async with server:
+        await server.serve_forever()
+
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     bot = Bot(
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    await dp.start_polling(bot)
+    await asyncio.gather(
+        start_web_server(),
+        dp.start_polling(bot),
+    )
 
 
 if __name__ == "__main__":
